@@ -1,0 +1,122 @@
+# fraud_news_detection.py
+import re
+import string
+import pickle
+import numpy as np
+import pandas as pd
+from typing import List
+
+from sklearn.pipeline import Pipeline
+from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
+import matplotlib.pyplot as plt
+
+# NLTK stopwords
+import nltk
+from nltk.corpus import stopwords
+try
+    STOPWORDS = set(stopwords.words(english))
+except LookupError
+    nltk.download(stopwords)
+    STOPWORDS = set(stopwords.words(english))
+
+def clean_text(text str) - str
+    Basic text cleaning lowercase, remove punctuation, urls, digits, stopwords.
+    if not isinstance(text, str)
+        text = str(text)
+    text = text.lower()
+    text = re.sub(r'httpS+www.S+', ' ', text)   # remove URLs
+    text = text.encode('ascii', errors='ignore').decode()  # remove emojis
+    text = re.sub(r'[%s]' % re.escape(string.punctuation), ' ', text)  # remove punctuation
+    text = re.sub(r'd+', ' ', text)  # remove digits
+    text = re.sub(r's+', ' ', text).strip()
+    tokens = [t for t in text.split() if t not in STOPWORDS and len(t)  1]
+    return  .join(tokens)
+
+def load_dataset(path_or_df)
+    Load dataset expects columns 'text' and 'label'.
+    if isinstance(path_or_df, pd.DataFrame)
+        df = path_or_df.copy()
+    else
+        df = pd.read_csv(path_or_df)
+    if 'text' not in df.columns
+        raise ValueError(Dataset must have a 'text' column)
+    if 'label' not in df.columns
+        raise ValueError(Dataset must have a 'label' column (0=real, 1=fake))
+    df = df[['text', 'label']].dropna()
+    return df
+
+def build_and_train(df pd.DataFrame)
+    Build pipeline, train, and return trained model + test results.
+    df['clean_text'] = df['text'].apply(clean_text)
+    X = df['clean_text'].values
+    y = df['label'].values
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42, stratify=y
+    )
+
+    pipeline = Pipeline([
+        ('tfidf', TfidfVectorizer(ngram_range=(1,2), min_df=3, max_df=0.9)),
+        ('clf', LogisticRegression(max_iter=1000, solver='liblinear'))
+    ])
+
+    print(Training model...)
+    pipeline.fit(X_train, y_train)
+    print(Training complete.)
+
+    # Evaluate
+    y_pred = pipeline.predict(X_test)
+    print(Accuracy, accuracy_score(y_test, y_pred))
+    print(Classification Reportn, classification_report(y_test, y_pred))
+
+    # Confusion matrix
+    cm = confusion_matrix(y_test, y_pred)
+    plt.imshow(cm, cmap=Blues)
+    plt.title(Confusion Matrix)
+    plt.colorbar()
+    plt.xlabel(Predicted)
+    plt.ylabel(Actual)
+    for i in range(cm.shape[0])
+        for j in range(cm.shape[1])
+            plt.text(j, i, cm[i, j], ha=center, va=center, color=red)
+    plt.show()
+
+    return pipeline, (X_test, y_test, y_pred)
+
+# Save model using pickle
+def save_model(pipeline, path=fraud_news_model.pkl)
+    with open(path, wb) as f
+        pickle.dump(pipeline, f)
+    print(fModel saved to {path})
+
+# Load model using pickle
+def load_model(path=fraud_news_model.pkl)
+    with open(path, rb) as f
+        return pickle.load(f)
+
+# Predict new texts
+def predict_texts(pipeline, texts List[str])
+    cleaned = [clean_text(t) for t in texts]
+    preds = pipeline.predict(cleaned)
+    return list(zip(texts, preds))
+
+# Example usage
+if __name__ == __main__
+    # Replace this with your dataset path (CSV with 'text' and 'label' columns)
+    DATA_PATH = dataset.csv
+
+    df = load_dataset(DATA_PATH)
+    model, results = build_and_train(df)
+    save_model(model)
+
+    # Quick test
+    examples = [
+        Breaking Celebrity endorses miracle cure for all diseases!,
+        Local council approves budget for new public library.
+    ]
+    predictions = predict_texts(model, examples)
+    for text, label in predictions
+        print(fnText {text}nPrediction {'FAKE' if label==1 else 'REAL'})
